@@ -1,31 +1,76 @@
-//==============================================================================
-// Welcome to scripting in Spark AR Studio! Helpful links:
-//
-// Scripting Basics - https://fb.me/spark-scripting-basics
-// Reactive Programming - https://fb.me/spark-reactive-programming
-// Scripting Object Reference - https://fb.me/spark-scripting-reference
-// Changelogs - https://fb.me/spark-changelog
-//
-// For projects created with v87 onwards, JavaScript is always executed in strict mode.
-//==============================================================================
-
-// How to load in modules
 const Scene = require('Scene');
-
-// Use export keyword to make a symbol available in scripting debug console
+export const FaceTracking = require('FaceTracking');
 export const Diagnostics = require('Diagnostics');
 
-// To use variables and functions across files, use export/import keyword
-// export const animationDuration = 10;
+const FaceDirection = Object.freeze({
+    NONE: 0,
+    TOP_LEFT: 1,
+    TOP_RIGHT: 2,
+    BOTTOM_LEFT: 3,
+    BOTTOM_RIGHT: 4,
+});
 
-// Use import keyword to import a symbol from another file
-// import { animationDuration } from './script.js'
+// Face rotation tracking
+let faceX = 0; // Left is negative, right is positive, [-0.5, 0.5]
+let faceY = 0; // Down is negative, up is positive, [-0.5, 0.5]
+const threshold = 0.1;
+let direction = FaceDirection.NONE;
 
-// To access scene objects
-// const directionalLight = Scene.root.find('directionalLight0');
+function playSound() {
+    switch (direction) {
+        case FaceDirection.NONE:
+            return;
+        case FaceDirection.TOP_LEFT:
+            Diagnostics.log('Top left');
+            return;
+        case FaceDirection.TOP_RIGHT:
+            Diagnostics.log('Top right');
+            return;
+        case FaceDirection.BOTTOM_LEFT:
+            Diagnostics.log('Bottom left');
+            return;
+        case FaceDirection.BOTTOM_RIGHT:
+            Diagnostics.log('Bottom right');
+            return;
+    }
+}
 
-// To access class properties
-// const directionalLightIntensity = directionalLight.intensity;
+function update() {
+    const oldDirection = direction;
 
-// To log messages to the console
-// Diagnostics.log('Console message logged from the script.');
+    /**
+     * Not sure why, but the threshold for looking slightly down seems to be way more sensitive than looking up.
+     * Maybe knowing what rotationZ actually does could help figure out what's happening.
+     *
+     * The other thing is there should be some sort of debouncing so that the little jiggles in the values don't
+     * end up repeatedly triggering the same direction.
+     */
+    if (faceX < -threshold && faceY < -threshold * 3) {
+        direction = FaceDirection.BOTTOM_LEFT;
+    } else if (faceX < -threshold && faceY > threshold) {
+        direction = FaceDirection.TOP_LEFT;
+    } else if (faceX > threshold && faceY < -threshold * 3) {
+        direction = FaceDirection.BOTTOM_RIGHT;
+    } else if (faceX > threshold && faceY > threshold) {
+        direction = FaceDirection.TOP_RIGHT;
+    } else {
+        direction = FaceDirection.NONE;
+    }
+
+    if (oldDirection !== direction) {
+        playSound();
+    }
+}
+
+FaceTracking.face(0).cameraTransform.rotationX.monitor().subscribe(function (event) {
+    faceY = -event.newValue;
+    update();
+});
+
+FaceTracking.face(0).cameraTransform.rotationY.monitor().subscribe(function (event) {
+    faceX = event.newValue;
+    update();
+});
+
+Diagnostics.watch('Face rotation horizontal ', FaceTracking.face(0).cameraTransform.rotationY);
+Diagnostics.watch('Face rotation veritcal ', FaceTracking.face(0).cameraTransform.rotationX);

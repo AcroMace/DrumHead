@@ -1,4 +1,5 @@
 const Scene = require('Scene');
+const Audio = require('Audio');
 export const FaceTracking = require('FaceTracking');
 export const Diagnostics = require('Diagnostics');
 
@@ -9,6 +10,9 @@ const FaceDirection = Object.freeze({
     BOTTOM_LEFT: 3,
     BOTTOM_RIGHT: 4,
 });
+
+const playbackController =
+Audio.getPlaybackController('aircanPlaybackController');
 
 // Face rotation tracking
 let faceX = 0; // Left is negative, right is positive, [-0.5, 0.5]
@@ -22,6 +26,8 @@ function playSound() {
             return;
         case FaceDirection.TOP_LEFT:
             Diagnostics.log('Top left');
+            playbackController.reset();
+            playbackController.setPlaying(true);
             return;
         case FaceDirection.TOP_RIGHT:
             Diagnostics.log('Top right');

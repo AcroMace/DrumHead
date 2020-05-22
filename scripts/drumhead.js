@@ -14,9 +14,9 @@ const FaceDirection = Object.freeze({
 const playbackController =
 Audio.getPlaybackController('aircanPlaybackController');
 
-// Face rotation tracking
-let faceX = 0; // Left is negative, right is positive, [-0.5, 0.5]
-let faceY = 0; // Down is negative, up is positive, [-0.5, 0.5]
+// Face rotation tracking - in radians
+let faceX = 0; // Left is negative, right is positive
+let faceY = 0; // Down is negative, up is positive
 const threshold = 0.1;
 let direction = FaceDirection.NONE;
 
@@ -80,3 +80,4 @@ FaceTracking.face(0).cameraTransform.rotationY.monitor().subscribe(function (eve
 
 Diagnostics.watch('Face rotation horizontal ', FaceTracking.face(0).cameraTransform.rotationY);
 Diagnostics.watch('Face rotation veritcal ', FaceTracking.face(0).cameraTransform.rotationX);
+Diagnostics.watch('Face rotation z ', FaceTracking.face(0).cameraTransform.rotationZ);

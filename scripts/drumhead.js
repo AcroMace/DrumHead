@@ -90,26 +90,43 @@ FaceTracking.face(0).cameraTransform.rotationY.monitor().subscribe(function (eve
  * If you plop a 3D object in the scene and set the position to the position reported here,
  * the object would be where the nose tip is.
  */
-const noseTip = FaceTracking.face(0).cameraTransform.applyTo(FaceTracking.face(0).nose.tip);
+const noseTipPositionVector = FaceTracking.face(0).cameraTransform.applyTo(FaceTracking.face(0).nose.tip);
 
 /**
- * Trying to figure out how to rotate back from the position of the nose.
- * Since the position of the nose is relative to the camera at (0,0,0), it's also the direction
- * vector to the nose from the camera.
+ * Line pointing directly forward from the nose.
+ * This does not point to the camera unless the nose is centered at the camera.
+ * Negative since the positive direction is from the camera to the nose, so making it negative
+ * points the vector from the nose to the camera.
  */
-const noseVector = Reactive.vector(noseTip.x, noseTip.y, noseTip.z);
-// This is the direction vector back from the nose to the camera
-const directionBackFromNose = Reactive.mul(noseVector, -1);
-// This should be the direction vector from the nose, transformed to the face rotation
-const transformedNoseDirection = FaceTracking.face(0).cameraTransform.applyTo(directionBackFromNose);
-// Making the direction vector a bit smaller since otherwise we'd reach all the way back to the camera's z-axis
-// This is too close to the camera so the sphere would not show up
-const slightlySmallerDirectionVector = Reactive.mul(transformedNoseDirection, 0.8);
-// Adding the location of the nose to the transformed direction should give a vector back from the nose
-const transformedNose = Reactive.add(slightlySmallerDirectionVector, noseVector);
-Diagnostics.watch('TNose x ', transformedNose.x);
-Diagnostics.watch('TNose y ', transformedNose.y);
-Diagnostics.watch('TNose z ', transformedNose.z);
-sphere.transform.x = transformedNose.x;
-sphere.transform.y = transformedNose.y;
-sphere.transform.z = transformedNose.z;
+const straightLineForwardFromNoseDirectionVector = Reactive.vector(0, 0, Reactive.mul(noseTipPositionVector.z, -1));
+
+/**
+ * This should be the direction vector from the nose, transformed to the face rotation.
+ * Imagine an anchor where the nose tip is from where the straight line was.
+ * When the head rotates, the vector rotates from that anchor without following the nose.
+ */
+const transformedNoseDirectionVector = FaceTracking.face(0).cameraTransform.applyTo(straightLineForwardFromNoseDirectionVector);
+
+/**
+ * Making the direction vector a bit smaller since otherwise we'd reach all the way back to the camera's z-axis.
+ * The closer this number is to 1 (i.e. almost all the way back to the camera), the more drastic the movement is
+ * when the head tilts.
+ * This number should coordinate with the drumstick length.
+ */
+const drumstickScaleFromNoseToCamera = 0.7;
+const slightlyShorterDirectionVector = Reactive.mul(transformedNoseDirectionVector, drumstickScaleFromNoseToCamera);
+
+/**
+ * Finally, adding the position of the nose with the direction vector back to the camera gives us a point
+ * near the camera.
+ * This is the position of the sphere. It should be slightly extended from where the drumstick position is.
+ */
+const pointPositionVector = Reactive.add(slightlyShorterDirectionVector, noseTipPositionVector);
+
+// Debugging only
+Diagnostics.watch('TNose x ', pointPositionVector.x);
+Diagnostics.watch('TNose y ', pointPositionVector.y);
+Diagnostics.watch('TNose z ', pointPositionVector.z);
+sphere.transform.x = pointPositionVector.x;
+sphere.transform.y = pointPositionVector.y;
+sphere.transform.z = pointPositionVector.z;

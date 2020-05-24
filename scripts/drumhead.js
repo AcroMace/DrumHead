@@ -4,7 +4,7 @@ const Audio = require('Audio');
 export const FaceTracking = require('FaceTracking');
 export const Diagnostics = require('Diagnostics');
 
-const FaceDirection = Object.freeze({
+const PointDirection = Object.freeze({
     NONE: 0,
     TOP_LEFT: 1,
     TOP_RIGHT: 2,
@@ -13,76 +13,67 @@ const FaceDirection = Object.freeze({
 });
 
 const camera = Scene.root.find('Camera');
-const focalPlane = camera.focalPlane;
-
 const sphere = Scene.root.find('Sphere');
+const playbackController = Audio.getPlaybackController('aircanPlaybackController');
 
-const playbackController =
-Audio.getPlaybackController('aircanPlaybackController');
+const xThreshold = 0.02;
+const yThreshold = 0.04;
 
-// Face rotation tracking - in radians
-let faceX = 0; // Left is negative, right is positive, [-PI, PI]
-let faceY = 0; // Down is negative, up is positive, [-PI/2, PI/2]
-const threshold = 0.1;
-let direction = FaceDirection.NONE;
+var state = {
+    // Where the nose is pointing
+    nosePoint: {
+        x: 0,
+        y: 0
+    },
+    // The direction the nose is pointing
+    direction: PointDirection.NONE,
+}
 
 function playSound() {
-    switch (direction) {
-        case FaceDirection.NONE:
+    switch (state.direction) {
+        case PointDirection.NONE:
             return;
-        case FaceDirection.TOP_LEFT:
+        case PointDirection.TOP_LEFT:
             Diagnostics.log('Top left');
             playbackController.reset();
             playbackController.setPlaying(true);
             return;
-        case FaceDirection.TOP_RIGHT:
+        case PointDirection.TOP_RIGHT:
             Diagnostics.log('Top right');
             return;
-        case FaceDirection.BOTTOM_LEFT:
+        case PointDirection.BOTTOM_LEFT:
             Diagnostics.log('Bottom left');
             return;
-        case FaceDirection.BOTTOM_RIGHT:
+        case PointDirection.BOTTOM_RIGHT:
             Diagnostics.log('Bottom right');
             return;
     }
 }
 
 function update() {
-    const oldDirection = direction;
+    const oldDirection = state.direction;
 
     /**
-     * Not sure why, but the threshold for looking slightly down seems to be way more sensitive than looking up.
-     * Maybe knowing what rotationZ actually does could help figure out what's happening.
-     *
+     * TODO: add debouncing
      * The other thing is there should be some sort of debouncing so that the little jiggles in the values don't
      * end up repeatedly triggering the same direction.
      */
-    if (faceX < -threshold && faceY < -threshold * 3) {
-        direction = FaceDirection.BOTTOM_LEFT;
-    } else if (faceX < -threshold && faceY > threshold) {
-        direction = FaceDirection.TOP_LEFT;
-    } else if (faceX > threshold && faceY < -threshold * 3) {
-        direction = FaceDirection.BOTTOM_RIGHT;
-    } else if (faceX > threshold && faceY > threshold) {
-        direction = FaceDirection.TOP_RIGHT;
+    if (state.nosePoint.x < -xThreshold && state.nosePoint.y < -yThreshold) {
+        state.direction = PointDirection.BOTTOM_LEFT;
+    } else if (state.nosePoint.x < -xThreshold && state.nosePoint.y > yThreshold) {
+        state.direction = PointDirection.TOP_LEFT;
+    } else if (state.nosePoint.x > xThreshold && state.nosePoint.y < -yThreshold) {
+        state.direction = PointDirection.BOTTOM_RIGHT;
+    } else if (state.nosePoint.x > xThreshold && state.nosePoint.y > yThreshold) {
+        state.direction = PointDirection.TOP_RIGHT;
     } else {
-        direction = FaceDirection.NONE;
+        state.direction = PointDirection.NONE;
     }
 
-    if (oldDirection !== direction) {
+    if (oldDirection !== state.direction) {
         playSound();
     }
 }
-
-FaceTracking.face(0).cameraTransform.rotationX.monitor().subscribe(function (event) {
-    faceY = -event.newValue;
-    update();
-});
-
-FaceTracking.face(0).cameraTransform.rotationY.monitor().subscribe(function (event) {
-    faceX = event.newValue;
-    update();
-});
 
 /**
  * This gives the nose's coordinates from the perspective of the camera, where the camera
@@ -121,12 +112,22 @@ const slightlyShorterDirectionVector = Reactive.mul(transformedNoseDirectionVect
  * near the camera.
  * This is the position of the sphere. It should be slightly extended from where the drumstick position is.
  */
-const pointPositionVector = Reactive.add(slightlyShorterDirectionVector, noseTipPositionVector);
+const nosePointPositionVector = Reactive.add(slightlyShorterDirectionVector, noseTipPositionVector);
+
+nosePointPositionVector.x.monitor().subscribe(function (event) {
+    state.nosePoint.x = event.newValue;
+    update();
+});
+
+nosePointPositionVector.y.monitor().subscribe(function (event) {
+    state.nosePoint.y = event.newValue;
+    update();
+});
 
 // Debugging only
-Diagnostics.watch('TNose x ', pointPositionVector.x);
-Diagnostics.watch('TNose y ', pointPositionVector.y);
-Diagnostics.watch('TNose z ', pointPositionVector.z);
-sphere.transform.x = pointPositionVector.x;
-sphere.transform.y = pointPositionVector.y;
-sphere.transform.z = pointPositionVector.z;
+Diagnostics.watch('Nose point x ', nosePointPositionVector.x);
+Diagnostics.watch('Nose point y ', nosePointPositionVector.y);
+Diagnostics.watch('Nose point z ', nosePointPositionVector.z);
+sphere.transform.x = nosePointPositionVector.x;
+sphere.transform.y = nosePointPositionVector.y;
+sphere.transform.z = nosePointPositionVector.z;

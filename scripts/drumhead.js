@@ -15,7 +15,7 @@ const PointDirection = Object.freeze({
 const sphere = Scene.root.find('Sphere');
 const snarePlaybackController = Audio.getPlaybackController('snarePlaybackController');
 const hiHatPlaybackController = Audio.getPlaybackController('hiHatPlaybackController');
-const kickPlaybackController = Audio.getPlaybackController('kickPlaybackController');
+const cymbalPlaybackController = Audio.getPlaybackController('cymbalPlaybackController');
 const tomPlaybackController = Audio.getPlaybackController('tomPlaybackController');
 
 const xThreshold = 0.02;
@@ -37,18 +37,18 @@ function playSound() {
             return;
         case PointDirection.TOP_LEFT:
             Diagnostics.log('Top left');
-            snarePlaybackController.reset();
-            snarePlaybackController.setPlaying(true);
-            return;
-        case PointDirection.TOP_RIGHT:
-            Diagnostics.log('Top right');
             hiHatPlaybackController.reset();
             hiHatPlaybackController.setPlaying(true);
             return;
+        case PointDirection.TOP_RIGHT:
+            Diagnostics.log('Top right');
+            cymbalPlaybackController.reset();
+            cymbalPlaybackController.setPlaying(true);
+            return;
         case PointDirection.BOTTOM_LEFT:
             Diagnostics.log('Bottom left');
-            kickPlaybackController.reset();
-            kickPlaybackController.setPlaying(true);
+            snarePlaybackController.reset();
+            snarePlaybackController.setPlaying(true);
             return;
         case PointDirection.BOTTOM_RIGHT:
             Diagnostics.log('Bottom right');
@@ -112,7 +112,7 @@ const transformedNoseDirectionVector = FaceTracking.face(0).cameraTransform.appl
  * when the head tilts.
  * This number should coordinate with the drumstick length.
  */
-const drumstickScaleFromNoseToCamera = 0.7;
+const drumstickScaleFromNoseToCamera = 0.6;
 const slightlyShorterDirectionVector = Reactive.mul(transformedNoseDirectionVector, drumstickScaleFromNoseToCamera);
 
 /**

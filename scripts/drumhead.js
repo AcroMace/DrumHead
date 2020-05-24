@@ -12,9 +12,11 @@ const PointDirection = Object.freeze({
     BOTTOM_RIGHT: 4,
 });
 
-const camera = Scene.root.find('Camera');
 const sphere = Scene.root.find('Sphere');
-const playbackController = Audio.getPlaybackController('aircanPlaybackController');
+const snarePlaybackController = Audio.getPlaybackController('snarePlaybackController');
+const hiHatPlaybackController = Audio.getPlaybackController('hiHatPlaybackController');
+const kickPlaybackController = Audio.getPlaybackController('kickPlaybackController');
+const tomPlaybackController = Audio.getPlaybackController('tomPlaybackController');
 
 const xThreshold = 0.02;
 const yThreshold = 0.04;
@@ -35,17 +37,23 @@ function playSound() {
             return;
         case PointDirection.TOP_LEFT:
             Diagnostics.log('Top left');
-            playbackController.reset();
-            playbackController.setPlaying(true);
+            snarePlaybackController.reset();
+            snarePlaybackController.setPlaying(true);
             return;
         case PointDirection.TOP_RIGHT:
             Diagnostics.log('Top right');
+            hiHatPlaybackController.reset();
+            hiHatPlaybackController.setPlaying(true);
             return;
         case PointDirection.BOTTOM_LEFT:
             Diagnostics.log('Bottom left');
+            kickPlaybackController.reset();
+            kickPlaybackController.setPlaying(true);
             return;
         case PointDirection.BOTTOM_RIGHT:
             Diagnostics.log('Bottom right');
+            tomPlaybackController.reset();
+            tomPlaybackController.setPlaying(true);
             return;
     }
 }

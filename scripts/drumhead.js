@@ -23,10 +23,10 @@ const hiHatPlaybackController = Audio.getPlaybackController('hiHatPlaybackContro
 const cymbalPlaybackController = Audio.getPlaybackController('cymbalPlaybackController');
 const tomPlaybackController = Audio.getPlaybackController('tomPlaybackController');
 
-const DEBUG = true;
-
-const xThreshold = 0.02;
-const yThreshold = 0.04;
+const DEBUG = false;
+const LENGTH_OF_DRUMSTICK_IN_3D_UNITS = 0.24;
+const HIT_TEST_HORIZONTAL_DEAD_SPACE_MULTIPLE = 0.8;
+const HIT_TEST_VERTICAL_DEAD_SPACE_MULTIPLE = 0.7;
 
 var state = {
     // Where the nose is pointing, projected onto the focal plane
@@ -41,7 +41,8 @@ var state = {
     focalWidth: 0,
     focalHeight: 0,
     // Updated when we get dimensions - hit test length at each corner in focal plane coordinates
-    hitTestEdgeLength: 0,
+    horizontalHitTestEdgeLength: 0,
+    verticalHitTestEdgeLength: 0,
 }
 
 function playSound() {
@@ -69,26 +70,26 @@ function playSound() {
 
 function isInHiHatLocation(x, y) {
     // Top left
-    return x < -state.focalWidth / 2 + state.hitTestEdgeLength
-        && y > state.focalHeight / 2 - state.hitTestEdgeLength;
+    return x < -state.focalWidth / 2 + state.horizontalHitTestEdgeLength
+        && y > state.focalHeight / 2 - state.verticalHitTestEdgeLength;
 }
 
 function isInCymbalLocation(x, y) {
     // Top right
-    return x > state.focalWidth / 2 - state.hitTestEdgeLength
-        && y > state.focalHeight / 2 - state.hitTestEdgeLength;
+    return x > state.focalWidth / 2 - state.horizontalHitTestEdgeLength
+        && y > state.focalHeight / 2 - state.verticalHitTestEdgeLength;
 }
 
 function isInSnareLocation(x, y) {
     // Bottom left
-    return x < -state.focalWidth / 2 + state.hitTestEdgeLength
-        && y < -state.focalHeight / 2 + state.hitTestEdgeLength;
+    return x < -state.focalWidth / 2 + state.horizontalHitTestEdgeLength
+        && y < -state.focalHeight / 2 + state.verticalHitTestEdgeLength;
 }
 
 function isInTomLocation(x, y) {
     // Bottom right
-    return x > state.focalWidth / 2 - state.hitTestEdgeLength
-        && y < -state.focalHeight / 2 + state.hitTestEdgeLength;
+    return x > state.focalWidth / 2 - state.horizontalHitTestEdgeLength
+        && y < -state.focalHeight / 2 + state.verticalHitTestEdgeLength;
 }
 
 /**
@@ -142,20 +143,22 @@ function resizeAndRepositionDrum() {
     snareRectangle.height = squareEdgeLength;
 }
 
-function calculateHitTestEdgeLength() {
-    return Math.min(state.focalWidth / 2, state.focalHeight / 2);
+function updateHitTestEdgeLength() {
+    const hitTestEdgeLength = Math.min(state.focalWidth / 2, state.focalHeight / 2);
+
+    // Reducing the hit test edge length in order to compensate for the empty space in the image files
+    state.horizontalHitTestEdgeLength = hitTestEdgeLength * HIT_TEST_HORIZONTAL_DEAD_SPACE_MULTIPLE;
+    state.verticalHitTestEdgeLength = hitTestEdgeLength * HIT_TEST_VERTICAL_DEAD_SPACE_MULTIPLE;
 }
 
 camera.focalPlane.width.monitor({ fireOnInitialValue: true }).subscribe(function (event) {
     state.focalWidth = event.newValue;
-    state.hitTestEdgeLength = calculateHitTestEdgeLength();
-    Diagnostics.log('Hit test edge length: ' + state.hitTestEdgeLength);
+    updateHitTestEdgeLength();
 });
 
 camera.focalPlane.height.monitor({ fireOnInitialValue: true }).subscribe(function (event) {
     state.focalHeight = event.newValue;
-    state.hitTestEdgeLength = calculateHitTestEdgeLength();
-    Diagnostics.log('Hit test edge length: ' + state.hitTestEdgeLength);
+    updateHitTestEdgeLength();
 });
 
 CameraInfo.previewSize.width.monitor({ fireOnInitialValue: true }).subscribe(function (event) {
@@ -194,13 +197,18 @@ const straightLineForwardFromNoseDirectionVector = Reactive.vector(0, 0, Reactiv
 const transformedNoseDirectionVector = FaceTracking.face(0).cameraTransform.applyTo(straightLineForwardFromNoseDirectionVector);
 
 /**
- * Making the direction vector a bit smaller since otherwise we'd reach all the way back to the camera's z-axis.
- * The closer this number is to 1 (i.e. almost all the way back to the camera), the more drastic the movement is
- * when the head tilts.
- * This number should coordinate with the drumstick length.
+ * We want to make the direction vector a bit smaller since otherwise we'd reach all the way back to the camera's z-axis.
+ * However, we want to start with the unit vector for the direction since the length of the drumstick is constant.
+ * If we don't and just multiply by a constant, then the point we point to would depend on how far the user is from
+ * the camera.
  */
-const drumstickScaleFromNoseToCamera = 0.6;
-const slightlyShorterDirectionVector = Reactive.mul(transformedNoseDirectionVector, drumstickScaleFromNoseToCamera);
+const unitTransformedNoseDirectionVector = Reactive.mul(transformedNoseDirectionVector, Reactive.div(1, transformedNoseDirectionVector.z));
+
+/**
+ * This magic number we're multiplying by should coordinate with the drumstick length.
+ * That length is set by the actual length of the 3D object, not programmatically.
+ */
+const slightlyShorterDirectionVector = Reactive.mul(unitTransformedNoseDirectionVector, LENGTH_OF_DRUMSTICK_IN_3D_UNITS);
 
 /**
  * Finally, adding the position of the nose with the direction vector back to the camera gives us a point

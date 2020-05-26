@@ -1,7 +1,8 @@
 const Reactive = require('Reactive');
 const Scene = require('Scene');
 const Audio = require('Audio');
-export const FaceTracking = require('FaceTracking');
+const FaceTracking = require('FaceTracking');
+const CameraInfo = require('CameraInfo');
 export const Diagnostics = require('Diagnostics');
 
 const PointDirection = Object.freeze({
@@ -12,23 +13,35 @@ const PointDirection = Object.freeze({
     BOTTOM_RIGHT: 4,
 });
 
-const sphere = Scene.root.find('Sphere');
+const camera = Scene.root.find('Camera');
+const hiHatRectangle = Scene.root.find('hiHatRectangle');
+const cymbalRectangle = Scene.root.find('cymbalRectangle');
+const tomRectangle = Scene.root.find('tomRectangle');
+const snareRectangle = Scene.root.find('snareRectangle');
 const snarePlaybackController = Audio.getPlaybackController('snarePlaybackController');
 const hiHatPlaybackController = Audio.getPlaybackController('hiHatPlaybackController');
 const cymbalPlaybackController = Audio.getPlaybackController('cymbalPlaybackController');
 const tomPlaybackController = Audio.getPlaybackController('tomPlaybackController');
 
+const DEBUG = true;
+
 const xThreshold = 0.02;
 const yThreshold = 0.04;
 
 var state = {
-    // Where the nose is pointing
-    nosePoint: {
+    // Where the nose is pointing, projected onto the focal plane
+    projectedPoint: {
         x: 0,
         y: 0
     },
     // The direction the nose is pointing
     direction: PointDirection.NONE,
+    // Focal point width and height - 0.5 for height in portrait, then the other one in scale
+    // The last value is always 0 for some reason, which is why I save these values in the update events as a hack
+    focalWidth: 0,
+    focalHeight: 0,
+    // Updated when we get dimensions - hit test length at each corner in focal plane coordinates
+    hitTestEdgeLength: 0,
 }
 
 function playSound() {
@@ -36,28 +49,52 @@ function playSound() {
         case PointDirection.NONE:
             return;
         case PointDirection.TOP_LEFT:
-            Diagnostics.log('Top left');
             hiHatPlaybackController.reset();
             hiHatPlaybackController.setPlaying(true);
             return;
         case PointDirection.TOP_RIGHT:
-            Diagnostics.log('Top right');
             cymbalPlaybackController.reset();
             cymbalPlaybackController.setPlaying(true);
             return;
         case PointDirection.BOTTOM_LEFT:
-            Diagnostics.log('Bottom left');
             snarePlaybackController.reset();
             snarePlaybackController.setPlaying(true);
             return;
         case PointDirection.BOTTOM_RIGHT:
-            Diagnostics.log('Bottom right');
             tomPlaybackController.reset();
             tomPlaybackController.setPlaying(true);
             return;
     }
 }
 
+function isInHiHatLocation(x, y) {
+    // Top left
+    return x < -state.focalWidth / 2 + state.hitTestEdgeLength
+        && y > state.focalHeight / 2 - state.hitTestEdgeLength;
+}
+
+function isInCymbalLocation(x, y) {
+    // Top right
+    return x > state.focalWidth / 2 - state.hitTestEdgeLength
+        && y > state.focalHeight / 2 - state.hitTestEdgeLength;
+}
+
+function isInSnareLocation(x, y) {
+    // Bottom left
+    return x < -state.focalWidth / 2 + state.hitTestEdgeLength
+        && y < -state.focalHeight / 2 + state.hitTestEdgeLength;
+}
+
+function isInTomLocation(x, y) {
+    // Bottom right
+    return x > state.focalWidth / 2 - state.hitTestEdgeLength
+        && y < -state.focalHeight / 2 + state.hitTestEdgeLength;
+}
+
+/**
+ * TODO: This can probably be simplified to use an AndList instead of using these if statements to
+ * make things more efficient, though not sure if it would still support debouncing
+ */
 function update() {
     const oldDirection = state.direction;
 
@@ -66,14 +103,15 @@ function update() {
      * The other thing is there should be some sort of debouncing so that the little jiggles in the values don't
      * end up repeatedly triggering the same direction.
      */
-    if (state.nosePoint.x < -xThreshold && state.nosePoint.y < -yThreshold) {
-        state.direction = PointDirection.BOTTOM_LEFT;
-    } else if (state.nosePoint.x < -xThreshold && state.nosePoint.y > yThreshold) {
+
+    if (isInHiHatLocation(state.projectedPoint.x, state.projectedPoint.y)) {
         state.direction = PointDirection.TOP_LEFT;
-    } else if (state.nosePoint.x > xThreshold && state.nosePoint.y < -yThreshold) {
-        state.direction = PointDirection.BOTTOM_RIGHT;
-    } else if (state.nosePoint.x > xThreshold && state.nosePoint.y > yThreshold) {
+    } else if (isInCymbalLocation(state.projectedPoint.x, state.projectedPoint.y)) {
         state.direction = PointDirection.TOP_RIGHT;
+    } else if (isInSnareLocation(state.projectedPoint.x, state.projectedPoint.y)) {
+        state.direction = PointDirection.BOTTOM_LEFT;
+    } else if (isInTomLocation(state.projectedPoint.x, state.projectedPoint.y)) {
+        state.direction = PointDirection.BOTTOM_RIGHT;
     } else {
         state.direction = PointDirection.NONE;
     }
@@ -82,6 +120,55 @@ function update() {
         playSound();
     }
 }
+
+/**
+ * Recalculate dimensions for the art assets
+ */
+
+function resizeAndRepositionDrum() {
+    const screenScale = CameraInfo.previewScreenScale.lastValue > 0 ? CameraInfo.previewScreenScale.lastValue : 1;
+    const screenWidth = CameraInfo.previewSize.width.lastValue / screenScale;
+    const screenHeight = CameraInfo.previewSize.height.lastValue / screenScale;
+    const squareEdgeLength = Math.floor(Math.min(screenWidth / 2, screenHeight / 2));
+
+    Diagnostics.log('Updating drum art assets to square edge length: ' + squareEdgeLength);
+    hiHatRectangle.width = squareEdgeLength;
+    hiHatRectangle.height = squareEdgeLength;
+    cymbalRectangle.width = squareEdgeLength;
+    cymbalRectangle.height = squareEdgeLength;
+    tomRectangle.width = squareEdgeLength;
+    tomRectangle.height = squareEdgeLength;
+    snareRectangle.width = squareEdgeLength;
+    snareRectangle.height = squareEdgeLength;
+}
+
+function calculateHitTestEdgeLength() {
+    return Math.min(state.focalWidth / 2, state.focalHeight / 2);
+}
+
+camera.focalPlane.width.monitor({ fireOnInitialValue: true }).subscribe(function (event) {
+    state.focalWidth = event.newValue;
+    state.hitTestEdgeLength = calculateHitTestEdgeLength();
+    Diagnostics.log('Hit test edge length: ' + state.hitTestEdgeLength);
+});
+
+camera.focalPlane.height.monitor({ fireOnInitialValue: true }).subscribe(function (event) {
+    state.focalHeight = event.newValue;
+    state.hitTestEdgeLength = calculateHitTestEdgeLength();
+    Diagnostics.log('Hit test edge length: ' + state.hitTestEdgeLength);
+});
+
+CameraInfo.previewSize.width.monitor({ fireOnInitialValue: true }).subscribe(function (event) {
+    resizeAndRepositionDrum();
+});
+
+CameraInfo.previewSize.height.monitor({ fireOnInitialValue: true }).subscribe(function (event) {
+    resizeAndRepositionDrum();
+});
+
+// Required in order for us to get a lastValue
+CameraInfo.previewScreenScale.monitor({ fireOnInitialValue: true });
+
 
 /**
  * This gives the nose's coordinates from the perspective of the camera, where the camera
@@ -122,20 +209,49 @@ const slightlyShorterDirectionVector = Reactive.mul(transformedNoseDirectionVect
  */
 const nosePointPositionVector = Reactive.add(slightlyShorterDirectionVector, noseTipPositionVector);
 
-nosePointPositionVector.x.monitor().subscribe(function (event) {
-    state.nosePoint.x = event.newValue;
+/**
+ * Projecting the nose point to the z-index of the focal point gives us an (x,y) coordinate bounded to the
+ * focal plane width and height.
+ * This is what the sphere would look like on the screen since that's 2D.
+ */
+const focalPointProjectionMultiple = Reactive.div(camera.focalPlane.distance, Reactive.abs(nosePointPositionVector.z));
+
+/**
+ * The multiplication part works since the position and direction vector are the same from the perspective
+ * of the camera.
+ * We're basically taking the vector to the point from the camera and extending it, or taking steps in the
+ * length of the distance between the camera and the point, until we reach the focal point.
+ */
+const nosePointProjectedToFocalPoint = Reactive.mul(nosePointPositionVector, focalPointProjectionMultiple);
+
+nosePointProjectedToFocalPoint.x.monitor().subscribe(function (event) {
+    state.projectedPoint.x = event.newValue;
     update();
 });
 
-nosePointPositionVector.y.monitor().subscribe(function (event) {
-    state.nosePoint.y = event.newValue;
+nosePointProjectedToFocalPoint.y.monitor().subscribe(function (event) {
+    state.projectedPoint.y = event.newValue;
     update();
 });
 
-// Debugging only
-Diagnostics.watch('Nose point x ', nosePointPositionVector.x);
-Diagnostics.watch('Nose point y ', nosePointPositionVector.y);
-Diagnostics.watch('Nose point z ', nosePointPositionVector.z);
-sphere.transform.x = nosePointPositionVector.x;
-sphere.transform.y = nosePointPositionVector.y;
-sphere.transform.z = nosePointPositionVector.z;
+/**
+ * Used only for debugging
+ */
+
+if (DEBUG) {
+    Diagnostics.watch('Focal plane width', camera.focalPlane.width);
+    Diagnostics.watch('Focal plane height', camera.focalPlane.height);
+    Diagnostics.watch('Focal plane distance', camera.focalPlane.distance);
+
+    Diagnostics.watch('Projected point x', nosePointProjectedToFocalPoint.x);
+    Diagnostics.watch('Projected point y', nosePointProjectedToFocalPoint.y);
+
+    Diagnostics.watch('Nose point x', nosePointPositionVector.x);
+    Diagnostics.watch('Nose point y', nosePointPositionVector.y);
+    Diagnostics.watch('Nose point z', nosePointPositionVector.z);
+
+    const sphere = Scene.root.find('Sphere');
+    sphere.transform.x = nosePointPositionVector.x;
+    sphere.transform.y = nosePointPositionVector.y;
+    sphere.transform.z = nosePointPositionVector.z;
+}

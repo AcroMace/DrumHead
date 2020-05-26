@@ -258,8 +258,8 @@ if (DEBUG) {
     Diagnostics.watch('Nose point y', nosePointPositionVector.y);
     Diagnostics.watch('Nose point z', nosePointPositionVector.z);
 
-    const sphere = Scene.root.find('Sphere');
-    sphere.transform.x = nosePointPositionVector.x;
-    sphere.transform.y = nosePointPositionVector.y;
-    sphere.transform.z = nosePointPositionVector.z;
+    const debugSphere = Scene.root.find('DebugSphere');
+    debugSphere.transform.x = nosePointPositionVector.x;
+    debugSphere.transform.y = nosePointPositionVector.y;
+    debugSphere.transform.z = nosePointPositionVector.z;
 }

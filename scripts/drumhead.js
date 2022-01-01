@@ -209,7 +209,7 @@ const PointDirection = Object.freeze({
      * Imagine an anchor where the nose tip is from where the straight line was.
      * When the head rotates, the vector rotates from that anchor without following the nose.
      */
-    const transformedNoseDirectionVector = FaceTracking.face(0).cameraTransform.applyTo(straightLineForwardFromNoseDirectionVector);
+    const transformedNoseDirectionVector = FaceTracking.face(0).cameraTransform.applyToVector(straightLineForwardFromNoseDirectionVector);
 
     /**
      * We want to make the direction vector a bit smaller since otherwise we'd reach all the way back to the camera's z-axis.

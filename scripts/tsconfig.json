@@ -10,10 +10,11 @@
     "outDir": "/Users/acromace/Library/Caches/Facebook/Spark AR Studio/Scripting/out-dir",
     "paths": {
       "*": [
-        "skylight-typedefs/99deb2e5a3eabbfa/*",
+        "skylight-typedefs/61bf4a363ef0586a/*",
         "skylight-node_modules/*"
       ]
     },
+    "target": "es5",
     "typeRoots": [
       "/Users/acromace/Library/Caches/Facebook/Spark AR Studio/Scripting/skylight-node_modules/@types"
     ],

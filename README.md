@@ -4,6 +4,11 @@ Spark AR project to play drums by swinging your head
 
 ![DrumHead demo gif](https://github.com/AcroMace/DrumHead/raw/master/Demo.gif)
 
+## Try it live!
+
+- [Try on Instagram](https://www.instagram.com/ar/861220708578242/)
+- [Try on Facebook](https://www.facebook.com/fbcameraeffects/tryit/861220708578242/)
+
 ## Getting started
 
 1. Open DrumHead.arproj in Spark AR Studio
